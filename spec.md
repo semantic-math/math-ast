@@ -1,41 +1,39 @@
-An AST can be produced by input that is syntactic valid.  Operations and
-functions may (or may not) be semantically valid depending on the operands.
-Moreover, the operands may affect the meaning and or the properties of an
-operation or function, e.g.
-- `a * b` commutes if `a` and `b` are scalars whereas `A * B` does not
-  commute if `A` and `B` matrices
+This document specifies the math AST.
 
-Semantic knowledge should be kept out of the AST, but can be used with an AST to
-for purposes of validating, evaluating, and transforming a mathematical statement.
-
-A mathematical statement could be an expression, equation, or definition.
-
-Multiple mathematical statements can be grouped into a linear sequence to form a
-computation, manipulation, or proof.  These specific types of sequences do not
-need to be explicitly modeled, only that there should be a way to describe a
-sequence of statements.  Let's call this a `"Program"` for lack of a better term.
-
-Some design goals for the nodes:
-- regular, similar mathematical structures should have similar tree structure
-- avoid one off nodes if possible
-
-# Key Ideas
-- similar structure
-- avoid one-off nodes
-- ASTs should be data only
-- parsers will produce most general nodes in the absense of semantic information
-- semantic information can be used to refine general nodes to more specific ones
-- different parsers can parse expressions differently to produce different, but
-  equally valid AST, e.g. `xyz` could be parsed as a single identifier with the
-  name `'xyz'` or implicit multiplication between three separate identifiers
-  named `'x'`, `'y'`, and `'z'`.
-- there is common semantic knowledge which is useful for K-12 which can be
-  packaged into a set of transforms that can be applied to ASTs to make them
-  more useful.
+- [Node objects](#node-objects)
+- [Program](#program)
+- [Relation](#relation)
+- [Operation](#operation)
+  - [Inverse](#inverse)
+  - [Summation](#summation)
+  - [Product](#product)
+  - [Limit](#limit)
+  - [Integral](#integral)
+- [Identifier](#identifier)
+- [Function](#function)
+  - [Derivative](#derivative)
+  - [PiecewiseFunction](#piecewisefunction)
+- [Number](#number)
+  - [ComplexNumber](#complexnumber)
+  - [Quaternion](#quaternion)
+- [Sequence](#sequence)
+- [Group](#group)
+  - [Parentheses](#parentheses)
+  - [Interval](#interval)
+  - [Tuple](#tuple)
+  - [Vector](#vector)
+  - [InnerProduct](#innerproduct)
+  - [Set](#set)
+- [Matrix](#matrix)
+- [Ellipsis](#ellipsis)
+- [Edge cases](#edge-cases)
+- [Parser details](#parser-details)
 
 # Node objects
 
 Borrowed from https://github.com/estree/estree/blob/master/es5.md#node-objects.
+
+All subsequent nodes inherit from this interface.
 
 ```
 interface Node {
@@ -98,13 +96,18 @@ to represent negation.
 ```
 interface Operation <: Node {
     type: "Operation";
-    op: string; '+', '-', '*', '/', '\u00b7' (middle dot), '^', etc.
-    implicit: boolean,
+    op: string; // '+', '-', '*', '/', '\u00b7', '^', 'sum', 'prod', 'int', etc.
     args: [ Expression ];
+    implicit: boolean;
+    sub: Expression;
+    sup: Expression;
 }
 ```
 
 Notes:
+- `implicit` is only used for multiplication.
+- `sub` and `sup` can be used together to indicate the lower/upper limits of an
+  integral or the starting/stopping points of summation or product notation.
 - It may make sense to flatten certain operations such as `'+'` and `'*'`.  An
   expression such as `1 + 2 + 3` has two different valid parse trees when using
   binary operations.  If we treat `'+'` as n-ary then it has only one valid
@@ -112,6 +115,49 @@ Notes:
   reason is that in certain circumstances you may want to represent `1 + 2 + 3`
   with binary operations to highlight that the expression can be evaluated in
   different orders.
+- There may be situations in which it may make sense to have an operator on its
+  own without any arguments, e.g. one-sided limits `lim_(x -> a^-)`.
+
+## Inverse
+
+Used to represent function inverses and inverse operations such as matrix
+inverses.
+
+```
+interface Inverse <: Node {
+    type: "Inverse";
+    arg: Function | Identifier;
+}
+```
+
+It can be derived from n `Operation` node under the following conditions:
+- the `op` property is a `"^"`
+- there are exactly two args
+- the second arg is a `Number` whose value is `"-1"`
+
+## Summation
+
+TODO
+
+## Product
+
+TODO
+
+## Limit
+
+```
+interface Limit <: Node {
+    type: "Limit";
+    expression: Expression;
+    variable: Identifier;
+    target: Expression;
+}
+```
+
+## Integral
+
+TODO
+- include what is being variable is the expression being integrated by
 
 # Identifier
 
@@ -121,9 +167,9 @@ identifier may be either depending on the context.
 
 ```
 interface Identifier <: Node {
-    type: 'Identifier',
+    type: 'Identifier';
     name: string;  // e.g. 'x', 'pi', 'atan2', etc.
-    subscript: null | Identifier | Number | Sequence
+    sub: null | Identifier | Number | Sequence;
 }
 ```
 
@@ -138,7 +184,7 @@ application of a function.
 ```
 interface Function <: Node {
     type: "Function",
-    label: Identifier,
+    id: Identifier,
     args: [ Expression ]
 }
 ```
@@ -147,14 +193,30 @@ Examples:
 - `z = f(x, y) = x * y`
 - `sin(pi / 2)`
 
+## Derivative
+
+```
+interface Derivative <: {
+    type: "Derivative",
+
+}
+derivatives: prime, Leibnitz,
+```
+
+## PiecewiseFunction
+
+TODO
+
 # Number
 
-`Number`
+`Number` represents an element of the Reals.  This includes +/- infinity.
 
 ```
 interface Number <: Node {
     type: "Number";
     value: string;
+    exact: boolean;
+    repeat: number;
 }
 ```
 
@@ -162,8 +224,22 @@ Notes:
 - The reason for storing the number as a string initial is order to avoid losing
   precision.  This may be of particular importance for science related
   applications.
+- Repeating decimals can be represented by setting the `repeat` property of the
+  number to a positive integer representing the number of digits at the end of
+  the decimal that should be repeated.
+- Non-repeating decimals cannot be represented exactly as numbers.  If you want
+  to store one of these numbers in a `Number` node, the `exact` property Should
+  be set to `false`.
 - It may make sense to convert to some other representation, e.g. number,
   fraction.js instance, etc. before evaluating or transforming the AST.
+
+## ComplexNumber
+
+TODO
+
+## Quaternion
+
+TODO
 
 # Sequence
 
@@ -180,32 +256,30 @@ interface Sequence <: Node {
 Examples:
 - `2x - y = 5, x + y = -1`
 
-# Brackets
+# Group
 
-`Brackets` encompasses parentheses as well as other related symbols.  Can be
-used for standard parenthesis, open/closed/half intervals, ordered tuples, sets
-etc.
+A `Group` is a way to surround another expression or sequence of expressions
+with delimiters such as parenthesis, square brackets, braces, etc.  It can be
+refined into more specific nodes such as `Interal`, `Tuple`, `Vector`, or `Set`.
 
 ```
-interface Brackets <: Node {
-    type: "Brackets";
+interface Group <: Node {
+    type: "Group";
     left: string;  // '(' | '[' | '{', left floor, left triangular bracket, etc.
     right: string;  // ')' | ']' | '}', right floor, right triangular bracket, etc.
-    content: Expression | [ Expression ];
+    content: Expression | Sequence;
 }
 ```
 
 Notes:
-- think about changing `Brackets` to `Delimiters` to support absolute value
+- think about how this could be used to support absolute value
 - is there any situation which having a relation inside of delimiters makes sense
 
 ## Parentheses
 
 ```
-interface Parentheses <: Brackets {
+interface Parentheses <: Node {
     type: "Parentheses";
-    left: '(';
-    right: ')';
     content: Expression;
 }
 ```
@@ -219,13 +293,23 @@ Examples:
 ## Interval
 
 ```
-interface Interval <: Brackets {
+interface Interval <: Node {
     type: "Interval";
-    left: '(' | '[';
-    right: ')' | ']';
-    content: [ Expression ];  // only two values
+    left: {
+        value: Expression;
+        type: "open" | "closed";
+    };
+    right: {
+        value: Expression;
+        type: "open" | "closed";
+    };
 }
 ```
+
+It can be derived from a `Group` node under the following conditions:
+- `content` was a `Sequence` with two args
+- `left` and `right` delimiters are either parentheses or square brackets or
+  some combination thereof.
 
 Examples:
 - `[0, Infinity)` half-closed interval from 0 to infinity.
@@ -235,10 +319,8 @@ Examples:
 ## Tuple
 
 ```
-interface Interval <: Brackets {
-    type: "Interval";
-    left: '(';
-    right: ')';
+interface Tuple <: Node {
+    type: "Tuple";
     content: [ Expression ];
 }
 ```
@@ -250,10 +332,9 @@ Examples:
 ## Vector
 
 ```
-interface Vector <: Brackets {
+interface Vector <: Node {
     type: "Interval";
-    left: '[' | '(';
-    right: ']' | ')';
+    delimiters: "round" | "square";
     content: [ Expression ];
 }
 ```
@@ -273,20 +354,40 @@ Notes:
   it makes sense to us a `Tuple`.  If it's linear algebra then a `Vector` makes
   more sense.
 
+## InnerProduct
+
+TODO
+
 ## Set
 
+`Set` is an unordered grouping of objects.
+
 ```
-interface Set <: Brackets {
+interface Set <: Node {
     type: "Set";
-    left: '{';
-    right: '}';
     content: Node;
 }
 ```
 
+It can be derived from a `Group` node under the following conditions:
+- `left` and `right` must both be braces.
+
 TODO:
 - What is contained within a `Set` could be anything, e.g. `{ names of fruit }`.
 - What about `{ x | x > 5, x != 10 }`?
+
+# Matrix
+
+```
+interface Matrix <: Node {
+    type: "Matrix";
+    delimiters: "round" | "square";
+    rows: [ Sequence ];
+}
+```
+
+Notes:
+- all rows must be `Sequence`s of the same length
 
 # Ellipsis
 
@@ -300,18 +401,40 @@ Examples:
 - `S(n) = 1 + 2 + ... + n`
 - `{ 1/2, 3/2, 5/2, ... }`
 
+# Units
+
+TODO
 
 # Edge cases:
 - `^-1` for function, trigonometric function, and matrix inverses will be parsed
-  as an exponent on the function.
+  as an exponent on the function, e.g. `f^-1(x)` would be parsed like so:
+```
+{
+    type: "Operation",
+    op: "^",
+    args: [
+        {
+            type: "Function",
+            id: {
+                type: "Identifier",
+                name: "f"
+            },
+            args: [
+                {
+                    type: "Identifier",
+                    name: "x"
+                }
+            ]
+        },
+        {
+            type: "Number",
+            value: "-1",
+        }
+    ]
+}
+```
 
-Weird edge cases:
-- `^-1` for function, trigonometric function, and matrix inverses
-- `^T` for transpose
-- ...
-
-Stuff that hasn't been described but should be at some point:
-- summation, product operators
-- limits, derivatives, integrals
-- matrices and column vectors
-- ...
+# Parser details
+A parser can choose to represent `sin^-1(x)` as either `1 / sin(x)` or as
+`arcsin(x)`.  It can also choose to interpret `v^T` as `v` to the power `T` or
+as the transpose of `v`.
