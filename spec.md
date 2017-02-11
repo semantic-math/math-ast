@@ -19,58 +19,291 @@ Some design goals for the nodes:
 - regular, similar mathematical structures should have similar tree structure
 - avoid one off nodes if possible
 
-`Program` is a sequence of statements which can be any other node.  This
-- type: `"Program"`
-- body: an array of statements which could be any other node.
+# Key Ideas
+- similar structure
+- avoid one-off nodes
+- ASTs should be data only
+- parsers will produce most general nodes in the absense of semantic information
+- semantic information can be used to refine general nodes to more specific ones
+- different parsers can parse expressions differently to produce different, but
+  equally valid AST, e.g. `xyz` could be parsed as a single identifier with the
+  name `'xyz'` or implicit multiplication between three separate identifiers
+  named `'x'`, `'y'`, and `'z'`.
+- there is common semantic knowledge which is useful for K-12 which can be
+  packaged into a set of transforms that can be applied to ASTs to make them
+  more useful.
+
+# Node objects
+
+Borrowed from https://github.com/estree/estree/blob/master/es5.md#node-objects.
+
+```
+interface Node {
+    type: string;
+    loc: SourceLocation | null;
+}
+```
+
+```
+interface SourceLocation {
+    source: string | null;
+    start: Position;
+    end: Position;
+}
+```
+
+```
+interface Position {
+    line: number; // >= 1
+    column: number; // >= 0
+}
+```
+
+# Program
+
+`Program` is a sequence of statements which can be any other node.  This is
+useful in describe a set of steps to evaluate an expression, solve and equation,
+or describe a proof.
+
+```
+interface Program <: Node {
+    type: "Program";
+    body: [ Node ];  // except Program
+}
+```
+
+# Relation
+
+`Relation` is used for equivalence relations, e.g. `=`, `<`, `<=`, etc., set
+relations, e.g. "is a subset of", and any other relations that might come up.
+
+```
+interface Relation <: Node {
+    type: "Relation";
+    rel: string;  // '=', '<', '<=', etc.
+    args: [ Expression ];
+}
+```
+An expression is any `Node` that is neither a `Program` nor a `Relation`.
+
+TODO:
+- figure out subset, superset, etc.
+
+
+# Operation
 
 `Operation` handles unary, binary, and n-ary operations.  Unary minus is used
 to represent negation.
-- type: `"Operation"`
-- op: a string containing the operation, e.g. `"+"`, `"*"`, `"/"`, `"\u00b7"`,
-  `^`, etc.
-- args: an array of any node other than `Relation` or whatever we call a sequence
 
-`Relation` is used for equivalence relations, e.g. `=`, `<`, `<=`, etc., set
-relations, e.g. "is a subset of", and any other relations that might come up
-- type `"Relation"`
-- rel: `=`, `<`, `<=`, etc. (TODO: figure out subset)
-- args: an array of two or more nodes other than `Statement` or
+```
+interface Operation <: Node {
+    type: "Operation";
+    op: string; '+', '-', '*', '/', '\u00b7' (middle dot), '^', etc.
+    implicit: boolean,
+    args: [ Expression ];
+}
+```
+
+Notes:
+- It may make sense to flatten certain operations such as `'+'` and `'*'`.  An
+  expression such as `1 + 2 + 3` has two different valid parse trees when using
+  binary operations.  If we treat `'+'` as n-ary then it has only one valid
+  parse tree.  The spec allows n-ary operations but does not require it.  The
+  reason is that in certain circumstances you may want to represent `1 + 2 + 3`
+  with binary operations to highlight that the expression can be evaluated in
+  different orders.
+
+# Identifier
 
 `Identifier` stores information about variables, constants, and function names.
 The reason not to have separate nodes for `Variable` and `Constant` is that an
 identifier may be either depending on the context.
-- type: `"Identifier"`
-- name: string, e.g. `"x"`, `"pi"`, `"atan2"`, etc.
-- subscript: `null`, `Identifier`, `Number`, or `Sequence` (sequence is useful
-  for matrix indices)
 
-`Function` can be used to represent either a function definition or function
-application.
-- type: `"Function"` (can be refined to `"FunctionDefinition"` or
-  `"FunctionApplication"`)
-- label: `Identifier`
-- args: any node other than `Relation` or `Program`.
+```
+interface Identifier <: Node {
+    type: 'Identifier',
+    name: string;  // e.g. 'x', 'pi', 'atan2', etc.
+    subscript: null | Identifier | Number | Sequence
+}
+```
+
+Notes:
+- `Sequence` is useful for matrix indices
+
+# Function
+
+`Function` can be used to represent in the definition of a function or in the
+application of a function.
+
+```
+interface Function <: Node {
+    type: "Function",
+    label: Identifier,
+    args: [ Expression ]
+}
+```
+
+Examples:
+- `z = f(x, y) = x * y`
+- `sin(pi / 2)`
+
+# Number
 
 `Number`
-- type: `"Number"`
-- value: a string representation of the number.  It may make sense to convert to
-some other representation, e.g. number, fraction.js instance, etc. before
-evaluating or transforming the AST.
+
+```
+interface Number <: Node {
+    type: "Number";
+    value: string;
+}
+```
+
+Notes:
+- The reason for storing the number as a string initial is order to avoid losing
+  precision.  This may be of particular importance for science related
+  applications.
+- It may make sense to convert to some other representation, e.g. number,
+  fraction.js instance, etc. before evaluating or transforming the AST.
+
+# Sequence
 
 `Sequence` comma separated sequence of non-program nodes
-- type: `"Sequence"`
-- args: one or more non-program nodes, a `Sequence` of `Relation`s could
-represent a system of equations, a sequence of numbers could represent an
-ordered pair or a vector.
+
+```
+interface Sequence <: Node {
+    type: "Sequence";
+    sep: ',' | ';';
+    args: [ Expression | Relation ];
+}
+```
+
+Examples:
+- `2x - y = 5, x + y = -1`
+
+# Brackets
 
 `Brackets` encompasses parentheses as well as other related symbols.  Can be
 used for standard parenthesis, open/closed/half intervals, ordered tuples, sets
 etc.
-- type: `"Brackets"`
-- left: string, either `"("`, `"["`, `"{"`, etc.
-- right: string, either `")"`, `"]"`, `"}"`, etc.
-- content: any non-program node (args: an array of non-program nodes might also
-  make sense)
+
+```
+interface Brackets <: Node {
+    type: "Brackets";
+    left: string;  // '(' | '[' | '{', left floor, left triangular bracket, etc.
+    right: string;  // ')' | ']' | '}', right floor, right triangular bracket, etc.
+    content: Expression | [ Expression ];
+}
+```
+
+Notes:
+- think about changing `Brackets` to `Delimiters` to support absolute value
+- is there any situation which having a relation inside of delimiters makes sense
+
+## Parentheses
+
+```
+interface Parentheses <: Brackets {
+    type: "Parentheses";
+    left: '(';
+    right: ')';
+    content: Expression;
+}
+```
+
+Examples:
+- `2 * (3 + 4)`
+- `x - (x + 1)`
+- `(3 + 4)`
+- `(5)`
+
+## Interval
+
+```
+interface Interval <: Brackets {
+    type: "Interval";
+    left: '(' | '[';
+    right: ')' | ']';
+    content: [ Expression ];  // only two values
+}
+```
+
+Examples:
+- `[0, Infinity)` half-closed interval from 0 to infinity.
+- `[0, Infinity]` valid parse tree, would be rejected by semantic validation
+- `(-1, 1)` open interval around 0
+
+## Tuple
+
+```
+interface Interval <: Brackets {
+    type: "Interval";
+    left: '(';
+    right: ')';
+    content: [ Expression ];
+}
+```
+
+Examples:
+- `(5, 10)`
+- `(0, 0, 1)`
+
+## Vector
+
+```
+interface Vector <: Brackets {
+    type: "Interval";
+    left: '[' | '(';
+    right: ']' | ')';
+    content: [ Expression ];
+}
+```
+
+Examples:
+- row vector: `[1, 2, 3]`
+- column vector: `[1; 2; 3]`
+- unit vector: `(0, 0, 1)`
+
+TODO:
+- Should we explicitly indicate whether a vector is a row or column vector?
+
+Notes:
+- You'll notice overlap between `Tuple` and `Vector`.  Which one application
+  decideds to use is based on additional semantic information the application
+  has about the context of the math statement.  If the content is geometry then
+  it makes sense to us a `Tuple`.  If it's linear algebra then a `Vector` makes
+  more sense.
+
+## Set
+
+```
+interface Set <: Brackets {
+    type: "Set";
+    left: '{';
+    right: '}';
+    content: Node;
+}
+```
+
+TODO:
+- What is contained within a `Set` could be anything, e.g. `{ names of fruit }`.
+- What about `{ x | x > 5, x != 10 }`?
+
+# Ellipsis
+
+```
+interface Ellipsis <: Node {
+    type: "Ellipsis";
+}
+```
+
+Examples:
+- `S(n) = 1 + 2 + ... + n`
+- `{ 1/2, 3/2, 5/2, ... }`
+
+
+# Edge cases:
+- `^-1` for function, trigonometric function, and matrix inverses will be parsed
+  as an exponent on the function.
 
 Weird edge cases:
 - `^-1` for function, trigonometric function, and matrix inverses
@@ -79,7 +312,6 @@ Weird edge cases:
 
 Stuff that hasn't been described but should be at some point:
 - summation, product operators
-- ellipses to indicate an infinite sequence, series
 - limits, derivatives, integrals
 - matrices and column vectors
 - ...
