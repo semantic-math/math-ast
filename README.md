@@ -3,51 +3,58 @@ AST for symbolic math
 
 # Motivation
 
-The goal of this project is to produce a specification for an AST that can be
-use to represent mathematical expressions and equations.
+The goal of this project is to enable software that manipulates math expressions
+to interoperate.
 
-There are a number of symbolic math libraries for JavaScript available.
-Unfortunately, there doesn't seem to be a good way for these efforts to
-interoperate with each other.  They all include their own parsers and produce
-their own ASTs.  This makes it difficult to swap out the parser if you want to
-handle a different syntax, e.g. treating `abc` as a single identifier vs.
-treating it as implicity multiplication between `a`, `b`, and `c`.  The ASTs
-themselves usually include methods which makes manipulating the AST by third
-party software difficult.
+There are a number of free symbolic math libraries for JavaScript.  Each has its
+own syntax and more important its own AST.
 
-# Key Ideas
+Having a common AST is an ideal way to enable interoperability as evidenced by
+Mozilla's Parser API and all of the tools that sprung up around it.
 
-An AST can be produced by input that is syntactic valid.  Operations and
-functions may (or may not) be semantically valid depending on the operands.
-Moreover, the operands may affect the meaning and or the properties of an
-operation or function, e.g.
-- `a * b` commutes if `a` and `b` are scalars whereas `A * B` does not
-  commute if `A` and `B` matrices
+For symbolic math, a common AST would allow for different parsers, renderers,
+solvers, and other tools to all interoperate with each other.
 
-Semantic knowledge should be kept out of the AST, but can be used with an AST to
-for purposes of validating, evaluating, and transforming a mathematical statement.
+# Scope
 
-A mathematical statement could be an expression, equation, or definition.
-
-Multiple mathematical statements can be grouped into a linear sequence to form a
-computation, manipulation, or proof.  These specific types of sequences do not
-need to be explicitly modeled, only that there should be a way to describe a
-sequence of statements.  Let's call this a `"Program"` for lack of a better term.
-
-Some design goals for the nodes:
-- regular, similar mathematical structures should have similar tree structure
-- avoid one off nodes if possible
+The hope is to cover K-12 and undergrad math and science.
 
 # Key Ideas
-- similar structure
+
+- AST is data only
+- use similar node structure
 - avoid one-off nodes
-- ASTs should be data only
-- parsers will produce most general nodes in the absense of semantic information
-- semantic information can be used to refine general nodes to more specific ones
-- different parsers can parse expressions differently to produce different, but
-  equally valid AST, e.g. `xyz` could be parsed as a single identifier with the
-  name `'xyz'` or implicit multiplication between three separate identifiers
-  named `'x'`, `'y'`, and `'z'`.
-- there is common semantic knowledge which is useful for K-12 which can be
-  packaged into a set of transforms that can be applied to ASTs to make them
-  more useful.
+- any node type can be the root of the AST
+
+# Parser Notes
+
+- An AST produced by a parser must only be syntatically valid although a parser
+  may choose to enforce some level semantic correctness as well.
+- In the absense of semantic information, parsers are encouraged to generate
+  the most general nodes, but are free to make their own assumptions.
+- Parsers are free to define their own syntax.  One parser may decide to treat
+  `abc` as a single identifier whereas another might treat it as implicit
+  multiplication between `a`, `b`, and `c`.  Software that manipulate ASTs
+  should ensure that they can handle multi-character strings for identifiers
+  because this is what's in the spec.
+
+# TODO
+
+- A [reference parser](https://github.com/kevinbarabash/math-parser) (wip) that
+  produces a math AST according to the spec.
+- A formatter that accepts a math AST object and outputs TeX code.
+- A set of helper functions:
+  - isExpression, isProduct, isFraction, etc.
+  - hasCommonDenominators
+  - findCommonTerms
+- A function to manipulate math ASTs by [replacing certain nodes](https://github.com/kevinbarabash/math-parser/blob/4b77bb327be493bfc50e58694b59357c97aec261/lib/replace.js).
+- A set of useful transforms:
+  - adding `0` is a no-op and can be revemoved
+  - multiplication by `1` is a no-op and can be removed
+  - intervals can't be closed when either end is `+/- infinity`
+  - division by `0` is `undefined` or `+infinity` or `-infinity` depending on the
+    exact situation.
+  - raising `0` to the `0` power is undefined
+- Semantic knowledge that can be used to determine whether a transform is valid:
+  - addition/multiplication are commutative and associative for these operands
+  - multplication does not commute for matrices

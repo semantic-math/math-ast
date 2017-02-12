@@ -245,6 +245,9 @@ Examples:
 - `z = f(x, y) = x * y`
 - `sin(pi / 2)`
 
+TODO:
+- have a list of special functions, e.g. trig, log, ln, etc.
+
 ## Derivative
 
 ```
