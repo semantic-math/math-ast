@@ -108,7 +108,9 @@ to represent negation.
 ```
 interface Operation <: Node {
     type: "Operation";
-    operator: BasicOperator | BigOperator | SetOperator | VectorOperator;
+    operator:
+        BasicOperator | BigOperator | LogicOperator |
+        SetOperator | VectorOperator;
     arguments: [ Expression ];
     implicit: boolean;
     subscript: Expression;
@@ -125,6 +127,12 @@ enum BasicOperator {
 ```
 enum BigOperator {
     'summation' | 'product' | 'limit' | 'integrate'
+}
+```
+
+```
+enum LogicOperator {
+    'and' | 'or' | 'not' | 'xor' | 'implies' | 'iff'
 }
 ```
 
