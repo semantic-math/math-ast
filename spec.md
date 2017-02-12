@@ -1,12 +1,13 @@
-This document specifies the math AST.
+This document specifies the math AST.  The syntax use is this document is not
+part of the spec.  Parser providers should feel free to define whatever syntax
+they think is useful.
 
 - [Node objects](#node-objects)
 - [Program](#program)
 - [Relation](#relation)
 - [Operation](#operation)
   - [Inverse](#inverse)
-  - [Summation](#summation)
-  - [Product](#product)
+  - [BoundedOperation](#boundedoperation)
   - [Limit](#limit)
   - [Integral](#integral)
 - [Identifier](#identifier)
@@ -14,6 +15,7 @@ This document specifies the math AST.
   - [Derivative](#derivative)
   - [PiecewiseFunction](#piecewisefunction)
 - [Number](#number)
+  - [Unit](#unit)
   - [ComplexNumber](#complexnumber)
   - [Quaternion](#quaternion)
 - [Sequence](#sequence)
@@ -184,13 +186,36 @@ It can be derived from n `Operation` node under the following conditions:
 - there are exactly two args
 - the second arg is a `Number` whose value is `"-1"`
 
-## Summation
+## BoundedOperation
 
-TODO
+```
+interface BoundedOperation <: Node {
+    type: "BoundedOperation";
+    operation: 'summation' | 'product' | 'integral' | 'union' | 'intersection'
+    bounds: [ Expression ];
+    variable: Identifier;
+}
+```
 
-## Product
+Examples:
+- `Int_0^1(x^2 dx)`
+  ```
+  {
+      type: "BoundedOperation",
+      operation: "integral",
+      bounds: [
+          { type: "Number", value: "0" },
+          { type: "Number", value: "1" },
+      ],
+      variable: { type: "Identifier", name: "x" }
+  }
+  ```
 
-TODO
+Notes:
+- `bounds` must have two values and only two values.
+
+TODO:
+- handle bounds such as `x in S` where S is a set of sets.
 
 ## Limit
 
@@ -202,11 +227,6 @@ interface Limit <: Node {
     target: Expression;
 }
 ```
-
-## Integral
-
-TODO
-- include what is being variable is the expression being integrated by
 
 # Identifier
 
@@ -235,9 +255,9 @@ application of a function.
 
 ```
 interface Function <: Node {
-    type: "Function",
-    id: Identifier,
-    args: [ Expression ]
+    type: "Function";
+    id: Identifier;
+    args: [ Expression ];
 }
 ```
 
@@ -250,13 +270,21 @@ TODO:
 
 ## Derivative
 
+A `Derivative` node describes taking the derivative of a function or expression.
+The `variables` refer to which variables the the derivative is being taken with
+respect to.  If it's a second derivative with respect to `x`, then `x` will
+appear twice in the `variables` array.
+
 ```
 interface Derivative <: {
-    type: "Derivative",
-
+    type: "Derivative";
+    arg: Function | Expression;
+    variables: [ Identifier ];
 }
-derivatives: prime, Leibnitz,
 ```
+
+TODO:
+- How do we represent evaluation of `f'` at a certain value?
 
 ## PiecewiseFunction
 
@@ -300,17 +328,29 @@ Notes:
 
 ## Unit
 
+A `Unit` is either a `CompoundUnit` or a `BaseUnit`.
+
 ```
-interface Unit <: Node {
-    type: "Unit";
-    value: string;
+interface CompoundUnit <: Node {
+    type: "CompoundUnit";
+    operation: 'multiply' | 'divide' | 'power';
+    args: [ BaseUnit | CompoundUnit | Number ];
 }
 ```
 
-TODO:
-- how to represent `ft^2`
-- how to represent `m/s`, `km/h`, etc.
-- degrees
+```
+interface BaseUnit <: Node {
+    type: "BaseUnit";
+    value: "m" | "g" | "s" | "ft" | "in" | "V" | "rad" | "deg" | ...;
+    prefix: "M" | "k" | "c" | "m" | ...;
+}
+```
+
+Note:
+- If the `operation` is `power` then the second arg must be a `Number` and more
+  specifically a non-zero integer.  Otherwise, it must be either a `BaseUnit` or
+  `CompoundUnit`.
+- Not all prefixes are used with all units, e.g. `kft` is invalid.
 
 ## ComplexNumber
 
@@ -542,3 +582,6 @@ as the transpose of `v`.
 The root of the AST can be any type of node.  This avoids a needless deep AST,
 but it does me that code that process math ASTs should be able to deal with
 this.
+
+A parser does not have to produce all nodes.  Some parsers may choose to parse
+`m/s` as a unit while others may parse it as division.
