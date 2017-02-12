@@ -78,15 +78,27 @@ relations, e.g. "is a subset of", and any other relations that might come up.
 ```
 interface Relation <: Node {
     type: "Relation";
-    rel: string;  // '=', '<', '<=', etc.
+    rel: '=' | Inequality | SetRelation;
     args: [ Expression ];
 }
 ```
-An expression is any `Node` that is neither a `Program` nor a `Relation`.
+
+An `Expression` is any `Node` that is neither a `Program` nor a `Relation`.
+
+```
+enum Inequality {
+    'lte' | 'leq' | 'gte' | 'geq' | 'neq'
+}
+```
+
+```
+enum SetRelation {
+    'in' | '!in' | 'subset' | 'ssubset' | 'superset' | 'ssuperset'
+}
+```
 
 TODO:
-- figure out subset, superset, etc.
-
+- Add 'identical' | 'congruent' | 'proportional' or use '-=' | '~=' | 'prop'?
 
 # Operation
 
@@ -96,16 +108,45 @@ to represent negation.
 ```
 interface Operation <: Node {
     type: "Operation";
-    op: string; // '+', '-', '*', '/', '\u00b7', '^', 'sum', 'prod', 'int', etc.
-    args: [ Expression ];
+    operator: BasicOperator | BigOperator | SetOperator | VectorOperator;
+    arguments: [ Expression ];
     implicit: boolean;
-    sub: Expression;
-    sup: Expression;
+    subscript: Expression;
+    superscript: Expression;
+}
+```
+
+```
+enum BasicOperator {
+    'add' | 'subtract' | 'multiply' | 'divide' | 'power'
+}
+```
+
+```
+enum BigOperator {
+    'summation' | 'product' | 'limit' | 'integrate'
+}
+```
+
+```
+enum SetOperator {
+    'intersect' | 'union' | 'difference'
+}
+```
+
+```
+enum VectorOperator {
+    'dot' | 'cross'
 }
 ```
 
 Notes:
 - `implicit` is only used for multiplication.
+- The reason why we use string enums for the operators instead of traditional
+  strings such as `'+'`, `'-'`, etc. is that there are multiple strings for the
+  same operator and the same symbol can represent different operations.
+- Syntax may not be enough to determine whether to use one operator versus
+  another, e.g. the center dot can represent multiplication or the dot product.
 - `sub` and `sup` can be used together to indicate the lower/upper limits of an
   integral or the starting/stopping points of summation or product notation.
 - It may make sense to flatten certain operations such as `'+'` and `'*'`.  An
@@ -169,12 +210,15 @@ identifier may be either depending on the context.
 interface Identifier <: Node {
     type: 'Identifier';
     name: string;  // e.g. 'x', 'pi', 'atan2', etc.
-    sub: null | Identifier | Number | Sequence;
+    subscript: null | Identifier | Number | Sequence;
 }
 ```
 
 Notes:
 - `Sequence` is useful for matrix indices
+
+TODO:
+- How to specify the type of the identifier, e.g. vector, angle, etc.
 
 # Function
 
@@ -217,25 +261,58 @@ interface Number <: Node {
     value: string;
     exact: boolean;
     repeat: number;
+    unit: null | Unit;
 }
 ```
+
+Examples:
+- The repeating decimal form of 122/99 is representated as
+  ```
+  {
+       type: "Number",
+       value: "1.23",
+       exact: true,
+       repeat: 2,
+       unit: null
+  }
+  ```
 
 Notes:
 - The reason for storing the number as a string initial is order to avoid losing
   precision.  This may be of particular importance for science related
   applications.
-- Repeating decimals can be represented by setting the `repeat` property of the
-  number to a positive integer representing the number of digits at the end of
-  the decimal that should be repeated.
 - Non-repeating decimals cannot be represented exactly as numbers.  If you want
   to store one of these numbers in a `Number` node, the `exact` property Should
   be set to `false`.
 - It may make sense to convert to some other representation, e.g. number,
   fraction.js instance, etc. before evaluating or transforming the AST.
 
+## Unit
+
+```
+interface Unit <: Node {
+    type: "Unit";
+    value: string;
+}
+```
+
+TODO:
+- how to represent `ft^2`
+- how to represent `m/s`, `km/h`, etc.
+- degrees
+
 ## ComplexNumber
 
-TODO
+```
+interface ComplexNumber <: Node {
+    type: "ComplexNumber";
+    real: null | Number | Identifier;
+    imag: null | Number | Identifier;
+}
+```
+
+Notes:
+- If both `real` and `imag` are `null`, the node is invalid.
 
 ## Quaternion
 
@@ -265,9 +342,21 @@ refined into more specific nodes such as `Interal`, `Tuple`, `Vector`, or `Set`.
 ```
 interface Group <: Node {
     type: "Group";
-    left: string;  // '(' | '[' | '{', left floor, left triangular bracket, etc.
-    right: string;  // ')' | ']' | '}', right floor, right triangular bracket, etc.
+    left: LeftDelimiter;
+    right: RightDelimiter;
     content: Expression | Sequence;
+}
+```
+
+```
+enum LeftDelimiter {
+    '(' | '[' | '{' | 'lfloor' | 'lciel' | 'langle'
+}
+```
+
+```
+enum RightDelimiter {
+    ')' | ']' | '}' | 'rfloor' | 'rciel' | 'rangle'
 }
 ```
 
@@ -311,6 +400,9 @@ It can be derived from a `Group` node under the following conditions:
 - `left` and `right` delimiters are either parentheses or square brackets or
   some combination thereof.
 
+TODO:
+- maybe `leftDelim`, `leftValue`, `rightDelim`, and `rightValue`?
+
 Examples:
 - `[0, Infinity)` half-closed interval from 0 to infinity.
 - `[0, Infinity]` valid parse tree, would be rejected by semantic validation
@@ -345,7 +437,8 @@ Examples:
 - unit vector: `(0, 0, 1)`
 
 TODO:
-- Should we explicitly indicate whether a vector is a row or column vector?
+- Explicitly indicate whether a vector is a row or column vector?
+- Indicate if it's a unit vector or not?
 
 Notes:
 - You'll notice overlap between `Tuple` and `Vector`.  Which one application
@@ -401,10 +494,6 @@ Examples:
 - `S(n) = 1 + 2 + ... + n`
 - `{ 1/2, 3/2, 5/2, ... }`
 
-# Units
-
-TODO
-
 # Edge cases:
 - `^-1` for function, trigonometric function, and matrix inverses will be parsed
   as an exponent on the function, e.g. `f^-1(x)` would be parsed like so:
@@ -438,3 +527,7 @@ TODO
 A parser can choose to represent `sin^-1(x)` as either `1 / sin(x)` or as
 `arcsin(x)`.  It can also choose to interpret `v^T` as `v` to the power `T` or
 as the transpose of `v`.
+
+The root of the AST can be any type of node.  This avoids a needless deep AST,
+but it does me that code that process math ASTs should be able to deal with
+this.
