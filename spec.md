@@ -59,6 +59,13 @@ interface Position {
 }
 ```
 
+# Unique Identifiers
+
+- case sensitive
+- always lowercase
+- no spaces or special characters, e.g. `-` or `_`
+- can't start with a number but may include numbers
+
 # Program
 
 `Program` is a sequence of statements which can be any other node.  This is
@@ -74,46 +81,58 @@ interface Program <: Node {
 
 # Relation
 
-`Relation` is used for equivalence relations, e.g. `=`, `<`, `<=`, etc., set
-relations, e.g. "is a subset of", and any other relations that might come up.
+`Relation` is used for equivalence relations and set relations.  Each relation
+is identified by a short unique identifier.  We've used HTML entities without
+the leading `&` and trailing `;`.  In some case, such as 'equals to', the HTML
+entity is a number, i.e. `&61;`.  This doesn't provide any clue as to what the
+relation is.  In cases like these we've picked a suitable alternative'.
 
 ```
 interface Relation <: Node {
     type: "Relation";
-    rel: '=' | Inequality | SetRelation;
+    rel: 'eq' | Inequality | SetRelation;
     args: [ Expression ];
 }
 ```
 
 An `Expression` is any `Node` that is neither a `Program` nor a `Relation`.
 
+TODO: be more accurate about Expression.  A `Unit` on its own is not an
+`Expression`.  What about an `Interval`?
+
 ```
 enum Inequality {
-    'lte' | 'leq' | 'gte' | 'geq' | 'neq'
+    'lt'    // less than
+  | 'le'    // less than or equal to
+  | 'gt'    // greater than
+  | 'ge'    // greater than or equal to
+  | 'ne'    // not equal to
+  | 'cong'  // congruent to
+  | 'equiv' // equivalent to
+  | 'prop'  // proportional to
 }
 ```
 
 ```
 enum SetRelation {
-    'in' | '!in' | 'subset' | 'ssubset' | 'superset' | 'ssuperset'
+    'isin'  // an element of
+  | 'notin' // not an element of
+  | 'sub'   // strict subset
+  | 'sube'  // subset
+  | 'sup'   // strict superset
+  | 'supe'  // superset
 }
 ```
 
-TODO:
-- Add 'identical' | 'congruent' | 'proportional' or use '-=' | '~=' | 'prop'?
-
 # Operation
 
-`Operation` handles unary, binary, and n-ary operations.  Unary minus is used
-to represent negation.
+`Operation` handles unary, binary, and n-ary operations.  Only
 
 ```
 interface Operation <: Node {
     type: "Operation";
-    operator:
-        BasicOperator | BigOperator | LogicOperator |
-        SetOperator | VectorOperator;
-    arguments: [ Expression ];
+    op: BasicOperator | LogicOperator | SetOperator | VectorOperator;
+    args: [ Expression ];
     implicit: boolean;
     subscript: Expression;
     superscript: Expression;
@@ -122,33 +141,36 @@ interface Operation <: Node {
 
 ```
 enum BasicOperator {
-    'add' | 'subtract' | 'multiply' | 'divide' | 'power'
-}
-```
-
-```
-enum BigOperator {
-    'summation' | 'product' | 'limit' | 'integrate'
+    'add'   // addition (n-ary)
+  | 'neg'   // negation (unary)
+  | 'mul'   // multiplication (n-ary)
+  | 'div'   // division (binary)
+  | 'pow'   // power (binary)
 }
 ```
 
 ```
 enum LogicOperator {
-    'and' | 'or' | 'not' | 'xor' | 'implies' | 'iff'
+    'and'   // and (n-ary)
+  | 'or'    // or (n-ary)
+  | 'not'   // not (unary)
+  | 'xor'   // exclusive or (n-ary)
+  | 'imp'   // implication (n-ary)
+  | 'iff'   // bidirection implication (n-ary)
 }
 ```
 
 ```
 enum SetOperator {
-    'intersect' | 'union' | 'difference'
+    'cap'   // intersection (n-ary)
+  | 'cup'   // union (n-ary)
+  | 'diff'  // set difference
 }
 ```
 
-```
-enum VectorOperator {
-    'dot' | 'cross'
-}
-```
+TODO:
+- How to represent `\pm` operator?
+- How to represent `1 - 2` vs `1 + -2`?
 
 Notes:
 - `implicit` is only used for multiplication.
@@ -191,9 +213,19 @@ It can be derived from n `Operation` node under the following conditions:
 ```
 interface BoundedOperation <: Node {
     type: "BoundedOperation";
-    operation: 'summation' | 'product' | 'integral' | 'union' | 'intersection'
+    op: BoundedOperator;
     bounds: [ Expression ];
     variable: Identifier;
+}
+```
+
+```
+enum BoundedOperator {
+    'sum'   // summation (unary)
+  | 'prod'  // product (unary)
+  | 'int'   // integral (unary)
+  | 'cap'   // intesection (unary)
+  | 'cup'   // union (unary)
 }
 ```
 
@@ -202,7 +234,7 @@ Examples:
   ```
   {
       type: "BoundedOperation",
-      operation: "integral",
+      op: "int",
       bounds: [
           { type: "Number", value: "0" },
           { type: "Number", value: "1" },
@@ -222,7 +254,7 @@ TODO:
 ```
 interface Limit <: Node {
     type: "Limit";
-    expression: Expression;
+    arg: Expression;
     variable: Identifier;
     target: Expression;
 }
@@ -261,12 +293,20 @@ interface Function <: Node {
 }
 ```
 
+Notes:
+- localized functions such as `tg` should be store as `tan` but rendered as
+  `tg` for any user facing purposes.
+
 Examples:
 - `z = f(x, y) = x * y`
 - `sin(pi / 2)`
 
 TODO:
 - have a list of special functions, e.g. trig, log, ln, etc.
+- C(n, k) = n choose k
+- P(n, k) = n permute k
+- log(base, value)
+- root(arg, index)
 
 ## Derivative
 
@@ -328,20 +368,20 @@ Notes:
 
 ## Unit
 
-A `Unit` is either a `CompoundUnit` or a `BaseUnit`.
+A `Unit` is either a `CompoundUnit` or a `SimpleUnit`.
 
 ```
 interface CompoundUnit <: Node {
     type: "CompoundUnit";
-    operation: 'multiply' | 'divide' | 'power';
-    args: [ BaseUnit | CompoundUnit | Number ];
+    op: 'multiply' | 'divide' | 'power';
+    args: [ SimpleUnit | CompoundUnit | Number ];
 }
 ```
 
 ```
-interface BaseUnit <: Node {
-    type: "BaseUnit";
-    value: "m" | "g" | "s" | "ft" | "in" | "V" | "rad" | "deg" | ...;
+interface SimpleUnit <: Node {
+    type: "SimpleUnit";
+    name: "m" | "g" | "s" | "ft" | "in" | "V" | "rad" | "deg" | ...;
     prefix: "M" | "k" | "c" | "m" | ...;
 }
 ```
