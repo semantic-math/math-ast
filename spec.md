@@ -134,8 +134,6 @@ interface Operation <: Node {
     op: BasicOperator | LogicOperator | SetOperator | VectorOperator;
     args: [ Expression ];
     implicit: boolean;
-    subscript: Expression;
-    superscript: Expression;
 }
 ```
 
@@ -143,6 +141,9 @@ interface Operation <: Node {
 enum BasicOperator {
     'add'   // addition (n-ary)
   | 'neg'   // negation (unary)
+  | 'pos'   // unary plus (unary)
+  | 'pn'    // plus-or-minus (unary)
+  | 'np'    // minus-or-plus (unary)
   | 'mul'   // multiplication (n-ary)
   | 'div'   // division (binary)
   | 'pow'   // power (binary)
@@ -164,32 +165,92 @@ enum LogicOperator {
 enum SetOperator {
     'cap'   // intersection (n-ary)
   | 'cup'   // union (n-ary)
-  | 'diff'  // set difference
+  | 'diff'  // set difference (binary)
 }
 ```
 
-TODO:
-- How to represent `\pm` operator?
-- How to represent `1 - 2` vs `1 + -2`?
+Examples:
+- `1 - 2`
+  ```
+  {
+      type: "Operation",
+      op: "add",
+      args: [
+          {
+              type: "Number",
+              value: "1"
+          },
+          {
+              type: "Operation",
+              op: "neg",
+              args: [
+                  {
+                      type: "Number,
+                      value: "2"
+                  }
+              ]
+          }
+      ]
+  }
+  ```
+- `1 + -2`
+  ```
+  {
+      type: "Operation",
+      op: "add",
+      args: [
+          {
+              type: "Number",
+              value: "1"
+          },
+          {
+              type: "Number,
+              value: "-2"
+          }
+      ]
+  }
+  ```
+- `a \pm b`
+  ```
+  {
+      type: "Operation",
+      op: "add",
+      args: [
+          {
+              type: "Identifier",
+              name: "a"
+          },
+          {
+              type: "Operation",
+              op: "pn",
+              args: [
+                  {
+                      type: "Identifier",
+                      name: "b"
+                  }
+              ]
+          }
+      ]
+  }
+  ```
+- `1 + 2 + 3`
+  ```
+  {
+      type: "Operation",
+      op: "add",
+      args: [
+          { type: "Number", value: "1" },
+          { type: "Number", value: "2" },
+          { type: "Number", value: "3" },
+      ]
+  }
+  ```
 
 Notes:
 - `implicit` is only used for multiplication.
-- The reason why we use string enums for the operators instead of traditional
-  strings such as `'+'`, `'-'`, etc. is that there are multiple strings for the
-  same operator and the same symbol can represent different operations.
-- Syntax may not be enough to determine whether to use one operator versus
-  another, e.g. the center dot can represent multiplication or the dot product.
-- `sub` and `sup` can be used together to indicate the lower/upper limits of an
-  integral or the starting/stopping points of summation or product notation.
-- It may make sense to flatten certain operations such as `'+'` and `'*'`.  An
-  expression such as `1 + 2 + 3` has two different valid parse trees when using
-  binary operations.  If we treat `'+'` as n-ary then it has only one valid
-  parse tree.  The spec allows n-ary operations but does not require it.  The
-  reason is that in certain circumstances you may want to represent `1 + 2 + 3`
-  with binary operations to highlight that the expression can be evaluated in
-  different orders.
-- There may be situations in which it may make sense to have an operator on its
-  own without any arguments, e.g. one-sided limits `lim_(x -> a^-)`.
+- Even though addition is a binary operation, expressions such as `1 + 2 + 3`
+  should be parsed as a single n-ary addition operation.  This is so that there
+  is only one valid AST for the same expression.
 
 ## Inverse
 
@@ -257,6 +318,7 @@ interface Limit <: Node {
     arg: Expression;
     variable: Identifier;
     target: Expression;
+    side: "left" | "right" | "both";
 }
 ```
 
