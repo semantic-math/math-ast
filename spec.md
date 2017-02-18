@@ -13,20 +13,18 @@ they think is useful.
 - [Identifier](#identifier)
 - [Function](#function)
   - [Derivative](#derivative)
-  - [PiecewiseFunction](#piecewisefunction)
+  - [Piecewise](#piecewise)
 - [Number](#number)
   - [Unit](#unit)
   - [ComplexNumber](#complexnumber)
   - [Quaternion](#quaternion)
-- [Sequence](#sequence)
-- [Group](#group)
-  - [Parentheses](#parentheses)
-  - [Interval](#interval)
-  - [Tuple](#tuple)
-  - [Vector](#vector)
-  - [InnerProduct](#innerproduct)
-  - [Set](#set)
+- [List](#list)
+- [Parentheses](#parentheses)
+- [Interval](#interval)
+- [Tuple](#tuple)
+- [Vector](#vector)
 - [Matrix](#matrix)
+- [Set](#set)
 - [Ellipsis](#ellipsis)
 - [Edge cases](#edge-cases)
 - [Parser details](#parser-details)
@@ -277,6 +275,7 @@ interface BoundedOperation <: Node {
     op: BoundedOperator;
     bounds: [ Expression ];
     variable: Identifier;
+    arg: Expression;
 }
 ```
 
@@ -284,25 +283,10 @@ interface BoundedOperation <: Node {
 enum BoundedOperator {
     'sum'   // summation (unary)
   | 'prod'  // product (unary)
-  | 'int'   // integral (unary)
   | 'cap'   // intesection (unary)
   | 'cup'   // union (unary)
 }
 ```
-
-Examples:
-- `Int_0^1(x^2 dx)`
-  ```
-  {
-      type: "BoundedOperation",
-      op: "int",
-      bounds: [
-          { type: "Number", value: "0" },
-          { type: "Number", value: "1" },
-      ],
-      variable: { type: "Identifier", name: "x" }
-  }
-  ```
 
 Notes:
 - `bounds` must have two values and only two values.
@@ -322,6 +306,30 @@ interface Limit <: Node {
 }
 ```
 
+## Integral
+
+```
+interface Limit <: Node {
+    type: "Integral";
+    left: null | Expression;
+    right: null | Expression;
+    arg: Expression;
+    variable: Identifier;
+}
+```
+
+Examples:
+- `Int_0^1(x^2 dx)`
+  ```
+  {
+      type: "Integral",
+      left: { type: "Number", value: "0" },
+      right: { type: "Number", value: "0" },
+      arg: { type: "Operation", op: "^", args: [...] },
+      variable: { type: "Identifier", name: "x" }
+  }
+  ```
+
 # Identifier
 
 `Identifier` stores information about variables, constants, and function names.
@@ -331,16 +339,25 @@ identifier may be either depending on the context.
 ```
 interface Identifier <: Node {
     type: 'Identifier';
-    name: string;  // e.g. 'x', 'pi', 'atan2', etc.
-    subscript: null | Identifier | Number | Sequence;
+    name: string;
+    subscript: null | Identifier | Number;
+    superscript: null | 'star';
+    accent: null | 'hat' | 'bar';
+    prefix: null | 'angle';
 }
 ```
 
 Notes:
-- `Sequence` is useful for matrix indices
+- `name` must start with a letter and cannot contain special characters
+- `name` can include letter like unicode characters, e.g. β, γ, etc.
+- Two `Identifier` nodes represent the same `Identifier` if all fields match,
+  It is not enough to simply check the names.  Since `Identifier`s can be
+  nested, it can be a bit of a pain to do this comparison.
 
 TODO:
-- How to specify the type of the identifier, e.g. vector, angle, etc.
+- Make it easier to compare indentifiers
+- How to indicate a line vs line segment vs ray, angles, etc.
+- How to indicate indicies for matrices, e.g. ij, 32, 3,12?
 
 # Function
 
@@ -363,12 +380,27 @@ Examples:
 - `z = f(x, y) = x * y`
 - `sin(pi / 2)`
 
-TODO:
-- have a list of special functions, e.g. trig, log, ln, etc.
-- C(n, k) = n choose k
-- P(n, k) = n permute k
-- log(base, value)
-- root(arg, index)
+## Well-known functions
+
+Trigonometry:
+- cos, sin, tan (basic)
+- acos, asin, atan (inverse)
+- cosh, sinh, tanh (hyperbolic)
+- acosh, asinh, atanh (inverse hyperbolic)
+
+Logarithms
+- log (base 10), ln (natural log), lg (base 2)
+
+Others:
+- root/nthroot
+- abs (absolute value, magnitude)
+- arg (argument)
+- det (determinant)
+- mod (modulo)
+- innerprod (inner product)
+- choose, permute
+- floor, ciel
+- Gamma, bessel(j, val)
 
 ## Derivative
 
@@ -388,9 +420,30 @@ interface Derivative <: {
 TODO:
 - How do we represent evaluation of `f'` at a certain value?
 
-## PiecewiseFunction
+## Piecewise
 
-TODO
+`Piecewise` is used to define the various cases that make up a piecewise
+function.
+
+```
+Piecewise <: Node {
+    type: "Piecewise";
+    cases: [ Case ];
+}
+```
+
+```
+Case <: Node {
+    type: "Case";
+    value: Expression;
+    domain: Domain;
+}
+```
+
+TODO:
+- How do we specify a `Domain`... it can take a lot of different forms
+  - a < x < b
+  - x | x in (n, n + 0.5) for n in z
 
 # Number
 
@@ -471,13 +524,13 @@ Notes:
 
 TODO
 
-# Sequence
+# List
 
-`Sequence` comma separated sequence of non-program nodes
+`List` comma separate list of non-program nodes
 
 ```
-interface Sequence <: Node {
-    type: "Sequence";
+interface List <: Node {
+    type: "List";
     sep: ',' | ';';
     args: [ Expression | Relation ];
 }
@@ -486,38 +539,7 @@ interface Sequence <: Node {
 Examples:
 - `2x - y = 5, x + y = -1`
 
-# Group
-
-A `Group` is a way to surround another expression or sequence of expressions
-with delimiters such as parenthesis, square brackets, braces, etc.  It can be
-refined into more specific nodes such as `Interal`, `Tuple`, `Vector`, or `Set`.
-
-```
-interface Group <: Node {
-    type: "Group";
-    left: LeftDelimiter;
-    right: RightDelimiter;
-    content: Expression | Sequence;
-}
-```
-
-```
-enum LeftDelimiter {
-    '(' | '[' | '{' | 'lfloor' | 'lciel' | 'langle'
-}
-```
-
-```
-enum RightDelimiter {
-    ')' | ']' | '}' | 'rfloor' | 'rciel' | 'rangle'
-}
-```
-
-Notes:
-- think about how this could be used to support absolute value
-- is there any situation which having a relation inside of delimiters makes sense
-
-## Parentheses
+# Parentheses
 
 ```
 interface Parentheses <: Node {
@@ -532,41 +554,38 @@ Examples:
 - `(3 + 4)`
 - `(5)`
 
-## Interval
+# Interval
 
 ```
 interface Interval <: Node {
     type: "Interval";
-    left: {
-        value: Expression;
-        type: "open" | "closed";
-    };
-    right: {
-        value: Expression;
-        type: "open" | "closed";
-    };
+    delims: [ Delimiter ];
+    values: [ Expression ];
 }
 ```
 
-It can be derived from a `Group` node under the following conditions:
-- `content` was a `Sequence` with two args
-- `left` and `right` delimiters are either parentheses or square brackets or
-  some combination thereof.
-
-TODO:
-- maybe `leftDelim`, `leftValue`, `rightDelim`, and `rightValue`?
+```
+enum Delimiter = {
+    'open' | 'closed
+}
 
 Examples:
 - `[0, Infinity)` half-closed interval from 0 to infinity.
 - `[0, Infinity]` valid parse tree, would be rejected by semantic validation
 - `(-1, 1)` open interval around 0
 
-## Tuple
+Notes:
+- Both `delims` and `values` must have a length of 2.
+
+# Tuple
+
+The main difference between a `Tuple` and a `Vector` is that you can't transpose
+a `Tuple`.
 
 ```
 interface Tuple <: Node {
     type: "Tuple";
-    content: [ Expression ];
+    elements: [ Expression ];
 }
 ```
 
@@ -574,13 +593,12 @@ Examples:
 - `(5, 10)`
 - `(0, 0, 1)`
 
-## Vector
+# Vector
 
 ```
 interface Vector <: Node {
     type: "Interval";
-    delimiters: "round" | "square";
-    content: [ Expression ];
+    elements: [ Expression ];
 }
 ```
 
@@ -600,40 +618,35 @@ Notes:
   it makes sense to us a `Tuple`.  If it's linear algebra then a `Vector` makes
   more sense.
 
-## InnerProduct
+# Matrix
 
-TODO
+```
+interface Matrix <: Node {
+    type: "Matrix";
+    rows: [ List ];
+}
+```
 
-## Set
+Notes:
+- All rows must be `List`s of the same length
+
+# Set
 
 `Set` is an unordered grouping of objects.
 
 ```
 interface Set <: Node {
     type: "Set";
-    content: Node;
+    elements: Node;
 }
 ```
 
-It can be derived from a `Group` node under the following conditions:
+It can be derived from a `Grouping` node under the following conditions:
 - `left` and `right` must both be braces.
 
 TODO:
 - What is contained within a `Set` could be anything, e.g. `{ names of fruit }`.
 - What about `{ x | x > 5, x != 10 }`?
-
-# Matrix
-
-```
-interface Matrix <: Node {
-    type: "Matrix";
-    delimiters: "round" | "square";
-    rows: [ Sequence ];
-}
-```
-
-Notes:
-- all rows must be `Sequence`s of the same length
 
 # Ellipsis
 
