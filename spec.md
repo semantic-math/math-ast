@@ -168,81 +168,85 @@ enum SetOperator {
 ```
 
 Examples:
-- `1 - 2`
-  ```
-  {
-      type: "Operation",
-      op: "add",
-      args: [
-          {
-              type: "Number",
-              value: "1"
-          },
-          {
-              type: "Operation",
-              op: "neg",
-              args: [
-                  {
-                      type: "Number,
-                      value: "2"
-                  }
-              ]
-          }
-      ]
-  }
-  ```
-- `1 + -2`
-  ```
-  {
-      type: "Operation",
-      op: "add",
-      args: [
-          {
-              type: "Number",
-              value: "1"
-          },
-          {
-              type: "Number,
-              value: "-2"
-          }
-      ]
-  }
-  ```
-- `a \pm b`
-  ```
-  {
-      type: "Operation",
-      op: "add",
-      args: [
-          {
-              type: "Identifier",
-              name: "a"
-          },
-          {
-              type: "Operation",
-              op: "pn",
-              args: [
-                  {
-                      type: "Identifier",
-                      name: "b"
-                  }
-              ]
-          }
-      ]
-  }
-  ```
-- `1 + 2 + 3`
-  ```
-  {
-      type: "Operation",
-      op: "add",
-      args: [
-          { type: "Number", value: "1" },
-          { type: "Number", value: "2" },
-          { type: "Number", value: "3" },
-      ]
-  }
-  ```
+
+`1 - 2`
+```
+{
+    type: "Operation",
+    op: "add",
+    args: [
+        {
+            type: "Number",
+            value: "1"
+        },
+        {
+            type: "Operation",
+            op: "neg",
+            args: [
+                {
+                    type: "Number,
+                    value: "2"
+                }
+            ]
+        }
+    ]
+}
+```
+
+`1 + -2`
+```
+{
+    type: "Operation",
+    op: "add",
+    args: [
+        {
+            type: "Number",
+            value: "1"
+        },
+        {
+            type: "Number,
+            value: "-2"
+        }
+    ]
+}
+```
+
+`a \pm b`
+```
+{
+    type: "Operation",
+    op: "add",
+    args: [
+        {
+            type: "Identifier",
+            name: "a"
+        },
+        {
+            type: "Operation",
+            op: "pn",
+            args: [
+                {
+                    type: "Identifier",
+                    name: "b"
+                }
+            ]
+        }
+    ]
+}
+```
+
+`1 + 2 + 3`
+```
+{
+    type: "Operation",
+    op: "add",
+    args: [
+        { type: "Number", value: "1" },
+        { type: "Number", value: "2" },
+        { type: "Number", value: "3" },
+    ]
+}
+```
 
 Notes:
 - `implicit` is only used for multiplication.
@@ -319,16 +323,17 @@ interface Limit <: Node {
 ```
 
 Examples:
-- `Int_0^1(x^2 dx)`
-  ```
-  {
-      type: "Integral",
-      left: { type: "Number", value: "0" },
-      right: { type: "Number", value: "0" },
-      arg: { type: "Operation", op: "^", args: [...] },
-      variable: { type: "Identifier", name: "x" }
-  }
-  ```
+
+`Int_0^1(x^2 dx)`
+```
+{
+    type: "Integral",
+    left: { type: "Number", value: "0" },
+    right: { type: "Number", value: "0" },
+    arg: { type: "Operation", op: "^", args: [...] },
+    variable: { type: "Identifier", name: "x" }
+}
+```
 
 # Identifier
 
@@ -460,16 +465,17 @@ interface Number <: Node {
 ```
 
 Examples:
-- The repeating decimal form of 122/99 is representated as
-  ```
-  {
-       type: "Number",
-       value: "1.23",
-       exact: true,
-       repeat: 2,
-       unit: null
-  }
-  ```
+
+The repeating decimal form of 122/99 is representated as
+```
+{
+    type: "Number",
+    value: "1.23",
+    exact: true,
+    repeat: 2,
+    unit: null
+}
+```
 
 Notes:
 - The reason for storing the number as a string initial is order to avoid losing
