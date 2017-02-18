@@ -6,7 +6,6 @@ they think is useful.
 - [Program](#program)
 - [Relation](#relation)
 - [Operation](#operation)
-  - [Inverse](#inverse)
   - [BoundedOperation](#boundedoperation)
   - [Limit](#limit)
   - [Integral](#integral)
@@ -254,23 +253,6 @@ Notes:
   should be parsed as a single n-ary addition operation.  This is so that there
   is only one valid AST for the same expression.
 
-## Inverse
-
-Used to represent function inverses and inverse operations such as matrix
-inverses.
-
-```
-interface Inverse <: Node {
-    type: "Inverse";
-    arg: Function | Identifier;
-}
-```
-
-It can be derived from n `Operation` node under the following conditions:
-- the `op` property is a `"^"`
-- there are exactly two args
-- the second arg is a `Number` whose value is `"-1"`
-
 ## BoundedOperation
 
 ```
@@ -374,6 +356,7 @@ interface Function <: Node {
     type: "Function";
     id: Identifier;
     args: [ Expression ];
+    inverse: boolean;
 }
 ```
 
@@ -384,6 +367,7 @@ Notes:
 Examples:
 - `z = f(x, y) = x * y`
 - `sin(pi / 2)`
+- `f^-1(x)`
 
 ## Well-known functions
 
