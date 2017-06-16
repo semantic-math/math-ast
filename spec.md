@@ -558,6 +558,7 @@ interface Interval <: Node {
 enum Delimiter = {
     'open' | 'closed
 }
+```
 
 Examples:
 - `[0, Infinity)` half-closed interval from 0 to infinity.
